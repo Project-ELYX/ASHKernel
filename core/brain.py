@@ -3,11 +3,9 @@ import json
 from google import genai
 from google.genai import types
 from openai import OpenAI
-from dotenv import load_dotenv
 
 class AshBrain:
     def __init__(self, memory_instance):
-        load_dotenv()
         self.memory_handler = memory_instance
         self.use_local = os.getenv("USE_LOCAL_INFERENCE", "false").lower() == "true"
         self.tools = [self.save_memory_tool, self.recall_recent_history]
@@ -15,7 +13,6 @@ class AshBrain:
 
         if self.use_local:
             self.client = OpenAI(api_key="local-token", base_url=os.getenv("LOCAL_API_BASE", "http://localhost:8000/v1"))
-            # FIX: Ensure this default matches the EngineManager's default
             self.model_id = os.getenv("LOCAL_MODEL_PATH", "./models/Hermes-3-8B")
         else:
             api_key = os.getenv("GEMINI_KEY") or os.getenv("GEMINI_API_KEY")
@@ -44,17 +41,16 @@ class AshBrain:
             {"role": "user", "content": f"CONTEXT: {context}\n\n{user_input}"}
         ]
 
-        # vLLM tool calling loop
-        for _ in range(5):  # Max 5 iterations to prevent infinite loops
+        for _ in range(5):
             response = self.client.chat.completions.create(
                 model=self.model_id,
                 messages=messages,
-                tools=[{"type": "function", "function": {"name": n}} for n in self.tool_map.keys()] # Simplified schema
+                tools=[{"type": "function", "function": {"name": n}} for n in self.tool_map.keys()]
             )
             
             msg = response.choices[0].message
             if not msg.tool_calls:
-                return msg.content # Final answer reached
+                return msg.content
 
             messages.append(msg)
             for tool_call in msg.tool_calls:
@@ -71,10 +67,10 @@ class AshBrain:
         return "ERROR: Local tool loop timed out."
 
     def _cloud_think(self, user_input, context, system_instr):
+        # Simplified config to avoid validation errors with the latest SDK
         config = types.GenerateContentConfig(
             system_instruction=system_instr,
-            tools=self.tools,
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+            tools=self.tools
         )
         resp = self.client.models.generate_content(
             model=self.model_id,
@@ -83,7 +79,6 @@ class AshBrain:
         )
         return resp.text
 
-    # --- TOOLS ---
     def save_memory_tool(self, category: str, fact: str):
         self.memory_handler.update_memory(category, fact)
         return f"Fact committed to {category}."

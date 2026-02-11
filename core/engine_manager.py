@@ -4,6 +4,7 @@ import os
 import signal
 import platform
 import sys
+import requests
 
 class EngineManager:
     def __init__(self, cmd_override=None, model_path=None):
@@ -13,18 +14,20 @@ class EngineManager:
         self.process = None
 
     def start(self):
-        if not self.use_local: return
+        if not self.use_local:
+            print("[ENGINE] Local engine bypassed. Using Cloud Umbilical.")
+            return
 
-        print(f"[ENGINE] Spawning local brain with emergency VRAM caps...")
+        print(f"[ENGINE] Spawning local brain via: {' '.join(self.cmd)}")
         
         env = os.environ.copy()
         env["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
         
         full_cmd = self.cmd + [
             "--model", self.model,
-            "--gpu-memory-utilization", "0.85", # Bumped back up slightly to allow more KV cache
-            "--max-model-len", "2048",         # Drastically reduced to fit KV cache in 0.44GiB
-            "--enforce-eager",                 # Disables CUDA graphs to save ~1GB overhead
+            "--gpu-memory-utilization", "0.85",
+            "--max-model-len", "2048",
+            "--enforce-eager",
             "--enable-auto-tool-choice",
             "--tool-call-parser", "hermes"
         ]
@@ -40,11 +43,32 @@ class EngineManager:
             start_new_session=(platform.system() != "Windows")
         )
         
-        print("[ENGINE] Attempting VRAM loading... (2048 Context Cap)")
-        time.sleep(20) 
+        self.wait_for_ready()
+
+    def wait_for_ready(self, timeout=120):
+        """Polls the vLLM health endpoint until the model is loaded."""
+        base_url = os.getenv("LOCAL_API_BASE", "http://localhost:8000/v1")
+        print(f"[ENGINE] Waiting for Safetensors to settle in VRAM...")
+        
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                response = requests.get(f"{base_url}/models", timeout=2)
+                if response.status_code == 200:
+                    print(f"[ENGINE] Neural Link established. Model is online.")
+                    return True
+            except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout):
+                pass
+            
+            time.sleep(2)
+            print(f"    [.] Still loading... ({int(time.time() - start_time)}s)")
+            
+        print("[ENGINE] CRITICAL: Model load timed out.")
+        return False
 
     def stop(self):
         if self.process:
+            print("[ENGINE] Terminating local vLLM process group.")
             if platform.system() == "Windows":
                 subprocess.call(['taskkill', '/F', '/T', '/PID', str(self.process.pid)])
             else:
