@@ -1,0 +1,9 @@
+google-genai
+discord.py
+python-dotenv
+psutil
+requests
+vt-py
+beautifulsoup4
+trafilatura
+openai

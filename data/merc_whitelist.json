@@ -1,0 +1,18 @@
+{
+  "processes": [
+    "Peace.exe",
+    "PeaceSetup.exe",
+    "EqualizerAPO.exe",
+    "Blender.exe",
+    "UnrealEditor.exe",
+    "Discord.exe",
+    "python.exe"
+  ],
+  "ips": [
+    "173.194.203.188"
+  ],
+  "directories": [
+    "C:\\Program Files\\",
+    "C:\\Windows\\System32\\"
+  ]
+}
