@@ -15,7 +15,8 @@ class AshBrain:
 
         if self.use_local:
             self.client = OpenAI(api_key="local-token", base_url=os.getenv("LOCAL_API_BASE", "http://localhost:8000/v1"))
-            self.model_id = os.getenv("LOCAL_MODEL_PATH")
+            # FIX: Ensure this default matches the EngineManager's default
+            self.model_id = os.getenv("LOCAL_MODEL_PATH", "./models/Hermes-3-8B")
         else:
             api_key = os.getenv("GEMINI_KEY") or os.getenv("GEMINI_API_KEY")
             self.client = genai.Client(api_key=api_key)

@@ -3,3 +3,4 @@ models/*
 .ASHKERNEL/*
 .env
 .envrc
+__pycache__

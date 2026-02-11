@@ -1,35 +1,39 @@
-import subprocess
+import psutil
+import tempfile
+import os
 import json
-import time
 
 def setup(kernel):
-    print("[MERC] Threat Hunter Module Loaded. Ready to sweep.")
+    print("[MERC] Threat Hunter Module Online. Scanning sectors...")
 
     def engage_merc_scan():
         """
-        Runs a deep diagnostic sweep of the Windows host. 
-        Checks for suspicious processes, weird network connections, and startup items.
+        Runs a deep diagnostic sweep without OS-specific shell calls.
+        Detects high-CPU ghosts and suspicious executables in temp dirs.
         """
-        print("[MERC] Initiating deep scan...")
-        
-        # 1. Look for 'Ghost' processes (High CPU but no visible window)
-        # 2. Check for suspicious network connections (ESTABLISHED on weird ports)
-        # 3. Check for unsigned executables in Temp folders
-        
-        script = """
-        $results = @{
-            suspicious_procs = Get-Process | Where-Object { $_.CPU -gt 500 -and $_.MainWindowTitle -eq "" } | Select-Object Name, Id, CPU | ConvertTo-Json;
-            network_audits = Get-NetTCPConnection -State Established | Where-Object { $_.RemotePort -notin 80, 443, 22 } | Select-Object RemoteAddress, RemotePort, OwningProcess | ConvertTo-Json;
-            temp_files = Get-ChildItem -Path "$env:TEMP" -File | Where-Object { $_.Extension -in ".exe", ".ps1", ".bat" } | Select-Object Name, LastWriteTime | ConvertTo-Json
+        # 1. Detect 'Ghost' processes (High CPU but typically no UI)
+        suspicious_procs = []
+        for proc in psutil.process_iter(['name', 'cpu_percent', 'pid']):
+            try:
+                # Flagging processes using > 20% CPU that aren't your core tools
+                if proc.info['cpu_percent'] > 20.0:
+                    suspicious_procs.append(proc.info)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        # 2. Check Temp Directory for rogue executables
+        temp_dir = tempfile.gettempdir()
+        rogue_files = []
+        for file in os.listdir(temp_dir):
+            if file.endswith(('.exe', '.ps1', '.bat', '.sh')):
+                rogue_files.append(file)
+
+        report = {
+            "suspicious_procs": suspicious_procs,
+            "temp_artifacts": rogue_files,
+            "os_context": os.name
         }
-        $results | ConvertTo-Json
-        """
-        
-        try:
-            raw_output = subprocess.check_output(["powershell.exe", "-Command", script], stderr=subprocess.STDOUT).decode('utf-8')
-            return f"SCAN COMPLETE. REPORT: {raw_output}"
-        except Exception as e:
-            return f"SCAN FAILED: {str(e)}"
+        return f"SCAN COMPLETE. REPORT: {json.dumps(report, indent=2)}"
 
     if kernel.brain:
         kernel.brain.register_tool(engage_merc_scan)

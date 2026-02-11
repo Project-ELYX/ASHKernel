@@ -7,3 +7,4 @@ vt-py
 beautifulsoup4
 trafilatura
 openai
+vllm

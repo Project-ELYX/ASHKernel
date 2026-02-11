@@ -3,7 +3,7 @@ import os
 import pkgutil
 import threading
 import traceback
-from datetime import datetime, time
+import time
 from core.history import AshHistory
 from core.brain import AshBrain
 
@@ -14,7 +14,7 @@ class AshKernel:
         self.brain = None # Attach brain later, TODO
         self.history = AshHistory()
         self.state = {
-            "last_interaction": 0,
+            "last_interaction": time.time(),
             "current_focus": None,
             "focus_start": 0
         }
